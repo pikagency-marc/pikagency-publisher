@@ -120,5 +120,9 @@ cron.schedule("0 19 * * *", () => runSlot("evening"));
 app.get("/", (req, res) => {
   res.status(200).send("OK - Pikagency publisher is running 🚀");
 });
+app.get("/run/:timeslot", async (req, res) => {
+  await runSlot(req.params.timeslot);
+  res.json({ ok: true, triggered: req.params.timeslot });
+});
 
 app.listen(PORT, () => console.log("Running on", PORT));
