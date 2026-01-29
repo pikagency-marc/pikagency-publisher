@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "post_1769714710259",
+      "caption": "Test TikTok matin PIKAGENCY",
+      "platforms": [
+        "tiktok"
+      ],
+      "timeslot": "morning",
+      "status": "READY_TIKTOK"
+    }
+  ]
+}
