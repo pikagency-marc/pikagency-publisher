@@ -42,9 +42,20 @@ async function sendTelegram(text) {
   await axios.post(url, { chat_id: TELEGRAM_CHAT_ID, text });
 }
 
+async function sendDiscord(text) {
+  const { DISCORD_WEBHOOK_URL } = process.env;
+  if (!DISCORD_WEBHOOK_URL) {
+    console.log("[Discord disabled]", text);
+    return;
+  }
+  await axios.post(DISCORD_WEBHOOK_URL, { content: text });
+}
+
 function pickNext(timeslot) {
   const q = loadQueue();
-  const item = q.items.find((x) => x.status === "PENDING" && x.timeslot === timeslot);
+  const item = q.items.find(
+    (x) => x.status === "PENDING" && x.timeslot === timeslot
+  );
   return { q, item };
 }
 
@@ -68,13 +79,22 @@ async function runSlot(timeslot) {
     }
   }
 
-  // TikTok notify
+  // TikTok notify (Discord + Telegram optionnel)
   {
     const { q, item } = pickNext(timeslot);
     if (item?.platforms?.includes("tiktok")) {
       try {
-        const msg = `📌 TikTok ${timeslot}\n\n📝 Caption:\n${item.caption}\n\n✅ Publie manuellement sur TikTok.`;
+        const msg =
+          `📌 TikTok ${timeslot}\n\n` +
+          `📝 Caption:\n${item.caption}\n\n` +
+          `✅ Publie manuellement sur TikTok.`;
+
+        // Discord en priorité
+        await sendDiscord(msg);
+
+        // Telegram si configuré
         await sendTelegram(msg);
+
         item.status = "READY_TIKTOK";
         saveQueue(q);
         console.log("[OK] TikTok notif", timeslot);
@@ -92,8 +112,14 @@ async function runSlot(timeslot) {
 app.post("/queue", (req, res) => {
   const { caption, platforms, timeslot } = req.body;
   if (!caption) return res.status(400).json({ error: "caption required" });
-  if (!platforms) return res.status(400).json({ error: "platforms required (facebook,tiktok)" });
-  if (!timeslot) return res.status(400).json({ error: "timeslot required (morning|noon|evening)" });
+  if (!platforms)
+    return res
+      .status(400)
+      .json({ error: "platforms required (facebook,tiktok)" });
+  if (!timeslot)
+    return res
+      .status(400)
+      .json({ error: "timeslot required (morning|noon|evening)" });
 
   const q = loadQueue();
   q.items.push({
@@ -108,21 +134,20 @@ app.post("/queue", (req, res) => {
 });
 
 app.get("/queue", (req, res) => res.json(loadQueue()));
-app.post("/run/:timeslot", async (req, res) => {
+
+app.get("/", (req, res) => {
+  res.status(200).send("OK - Pikagency publisher is running 🚀");
+});
+
+// Déclenchement manuel (GET)
+app.get("/run/:timeslot", async (req, res) => {
   await runSlot(req.params.timeslot);
-  res.json({ ok: true });
+  res.json({ ok: true, triggered: req.params.timeslot });
 });
 
 // CRON (heure serveur Render = UTC généralement)
 cron.schedule("0 9 * * *", () => runSlot("morning"));
 cron.schedule("0 13 * * *", () => runSlot("noon"));
 cron.schedule("0 19 * * *", () => runSlot("evening"));
-app.get("/", (req, res) => {
-  res.status(200).send("OK - Pikagency publisher is running 🚀");
-});
-app.get("/run/:timeslot", async (req, res) => {
-  await runSlot(req.params.timeslot);
-  res.json({ ok: true, triggered: req.params.timeslot });
-});
 
 app.listen(PORT, () => console.log("Running on", PORT));
